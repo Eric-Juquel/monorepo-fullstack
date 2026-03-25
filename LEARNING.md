@@ -859,6 +859,39 @@ Pour `main` et `develop` :
 
 → Impossible de pousser directement, impossible de merger si la CI est rouge.
 
+> **Note repo privé gratuit** : les branch protection rules ne sont pas appliquées sur les repos privés sans plan GitHub Team. Rends le repo public pour les activer gratuitement (recommandé pour un projet portfolio).
+
+> **Note approvals en solo** : mettre "Required approvals" à 1 bloque tes propres PRs puisque GitHub interdit l'auto-approbation via l'UI. Décoche la sous-option "Require approvals" pour travailler seul tout en gardant la protection PR active.
+
+### 8.6 Stratégie de merge : quelle option choisir sur GitHub ?
+
+Sur chaque PR, GitHub propose trois modes de merge :
+
+| Mode | Résultat | Quand l'utiliser |
+|------|----------|-----------------|
+| **Merge commit** | Crée un commit de merge, préserve tout l'historique de la branche | `develop → main` ✅ — marque un point de release visible |
+| **Squash and merge** | Écrase tous les commits en un seul sur la branche cible | `feat/* → develop` avec beaucoup de petits commits de travail |
+| **Rebase and merge** | Rejoue les commits de la branche sur la cible, historique linéaire | `feat/* → develop` avec des commits déjà propres |
+
+**Règle pratique pour ce monorepo :**
+
+```
+feat/* → develop   →  Squash or Rebase   (historique propre sur develop)
+develop → main     →  Merge commit        (point de release clairement visible)
+```
+
+L'historique de `main` ressemble alors à :
+
+```
+* Merge develop into main        ← release visible avec date
+|\
+| * fix(docker): apk upgrade CVE
+| * fix(tests): add .env.test
+| * fix(ci): typecheck + trivy
+|/
+* feat: init monorepo
+```
+
 ### ✅ Checkpoint
 
 ```bash
