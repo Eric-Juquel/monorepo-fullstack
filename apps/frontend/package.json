@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "mock:api": "json-server --watch db.json --port 3001",
     "dev:all": "concurrently \"pnpm dev\" \"pnpm mock:api\"",
+    "typecheck": "tsc -b --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

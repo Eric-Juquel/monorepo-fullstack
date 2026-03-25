@@ -48,7 +48,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm --filter frontend tsc -b --noEmit
+        run: pnpm --filter frontend typecheck
 
       - name: Lint
         run: pnpm --filter frontend lint
@@ -84,7 +84,7 @@ jobs:
       # Scanne les fichiers package.json / pnpm-lock.yaml du frontend
       # pour détecter des packages npm avec des CVE connues
       - name: Scan npm dependencies (filesystem)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: ./apps/frontend
@@ -101,7 +101,7 @@ jobs:
         run: docker build -t frontend:${{ github.sha }} ./apps/frontend
 
       - name: Scan Docker image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: frontend:${{ github.sha }}
