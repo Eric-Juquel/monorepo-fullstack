@@ -55,14 +55,15 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
 
-      # Create Vercel Build Output API structure for --prebuilt deploy
+      # Create Vercel Build Output API structure for --prebuilt deploy at repo root.
       # vercel build fails in pnpm monorepos (spawn sh ENOENT), so we build
       # with pnpm and manually produce the .vercel/output layout.
+      # Deploy runs from repo root so Vercel resolves "Root Directory = apps/frontend"
+      # correctly without doubling the path.
       - name: Prepare Vercel output
-        working-directory: apps/frontend
         run: |
           mkdir -p .vercel/output/static
-          cp -r dist/. .vercel/output/static/
+          cp -r apps/frontend/dist/. .vercel/output/static/
           cat > .vercel/output/config.json << 'EOF'
           {
             "version": 3,
@@ -74,7 +75,6 @@ jobs:
           EOF
 
       - name: Deploy to Vercel
-        working-directory: apps/frontend
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
