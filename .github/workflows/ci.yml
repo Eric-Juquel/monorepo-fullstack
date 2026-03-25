@@ -1,14 +1,17 @@
 name: CI
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Déclencheurs : sur push et PR vers main
-# path filters → le job frontend ne tourne QUE si des fichiers frontend changent
+# Déclencheurs :
+#   push → main      : après merge de develop (dernier garde-fou avant prod)
+#   push → develop   : après merge d'une branche feat/* fix/* chore/*
+#   PR   → develop   : validation d'une feature avant merge dans develop
+#   PR   → main      : validation de develop avant mise en production
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 # Opter dans Node.js 24 pour les actions GitHub (checkout, setup-node...)
 # Node.js 20 est déprécié depuis septembre 2025, Node.js 24 obligatoire en juin 2026
