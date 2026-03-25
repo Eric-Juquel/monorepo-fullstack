@@ -1,28 +1,28 @@
 name: Deploy
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Le CD (Continuous Deployment) ne se déclenche QUE sur push vers main
-# (pas sur les PRs — on ne déploie pas du code non mergé)
+# CD triggers on push to main only
+# PRs never trigger a deployment — we only deploy merged, validated code
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
     branches: [main]
 
-# Opter dans Node.js 24 pour les actions GitHub (checkout, setup-node...)
-# Node.js 20 est déprécié depuis septembre 2025, Node.js 24 obligatoire en juin 2026
+# Opt into Node.js 24 for GitHub Actions runners (checkout, setup-node...)
+# Node.js 20 is deprecated since September 2025, Node.js 24 required from June 2026
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # Déploiement Frontend sur Vercel
-  # Prérequis GitHub Secrets à configurer dans :
-  # Settings > Secrets and variables > Actions
-  #   - VERCEL_TOKEN      → token Vercel (vercel.com > Account Settings > Tokens)
-  #   - VERCEL_ORG_ID     → ton org ID Vercel (vercel.com > Settings)
-  #   - VERCEL_PROJECT_ID → l'ID du projet Vercel (dossier .vercel/project.json après vercel link)
-  #   - VITE_API_BASE_URL → URL de ton API en production
-  # ───────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Deploy frontend to Vercel
+  #
+  # Required GitHub Secrets (Settings > Secrets and variables > Actions):
+  #   VERCEL_TOKEN      → Vercel token (vercel.com > Account Settings > Tokens)
+  #   VERCEL_ORG_ID     → org ID from .vercel/project.json after `vercel link`
+  #   VERCEL_PROJECT_ID → project ID from .vercel/project.json after `vercel link`
+  #   VITE_API_BASE_URL → production API URL
+  # ─────────────────────────────────────────────────────────────────────────────
   deploy-frontend:
     name: Deploy Frontend → Vercel
     runs-on: ubuntu-latest
@@ -72,13 +72,13 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # Déploiement Backend — stub pour NestJS (Railway / Fly.io / autre)
-  # ───────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Backend deployment — stub for NestJS (Railway / Fly.io / TBD)
+  # ─────────────────────────────────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy Backend → (à définir)
+    name: Deploy Backend → (TBD)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Stub (backend pas encore créé)
-        run: echo "Backend CD sera configuré quand NestJS sera ajouté"
+      - name: Stub (backend not yet created)
+        run: echo "Backend CD will be configured when NestJS is added"
