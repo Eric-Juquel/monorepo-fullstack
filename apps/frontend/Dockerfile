@@ -37,6 +37,10 @@ RUN pnpm build
 # ── Stage 2 : Runner ─────────────────────────────────────────────────────────
 FROM nginx:alpine AS runner
 
+# Mettre à jour les packages Alpine pour corriger les CVE connues (ex: zlib)
+# apk upgrade installe les dernières versions des packages déjà présents dans l'image
+RUN apk upgrade --no-cache
+
 # Copier UNIQUEMENT les fichiers buildés depuis le stage builder
 # Node.js et node_modules ne sont PAS copiés → image légère
 COPY --from=builder /app/dist /usr/share/nginx/html
