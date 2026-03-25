@@ -331,6 +331,17 @@ La CI valide. Le CD livre. On les sépare pour pouvoir réutiliser la CI sur les
 
 ### 3.3 Récupérer les credentials Vercel
 
+**Option A — Via l'interface web Vercel (recommandée si proxy d'entreprise)**
+
+1. Va sur [vercel.com](https://vercel.com) → New Project → importe le repo GitHub
+2. Autorise Vercel à accéder au repo : GitHub → Settings → Integrations → Applications → Vercel → Configure → ajoute le repo
+3. Dans "Root Directory" → spécifie `apps/frontend`
+4. Une fois le projet créé :
+   - **Project ID** → Settings du projet → General (en bas de page)
+   - **Org ID** → Settings du compte → General
+
+**Option B — Via le CLI**
+
 ```bash
 # Installe Vercel CLI
 pnpm add -g vercel
@@ -344,7 +355,11 @@ vercel link
 cat .vercel/project.json
 ```
 
-Récupère aussi ton token : [vercel.com/account/tokens](https://vercel.com/account/tokens)
+> **Note proxy d'entreprise** : si `vercel link` échoue avec une erreur de certificat SSL (`unable to get local issuer certificate`), utilise l'option A (interface web) ou contourne temporairement avec `NODE_TLS_REJECT_UNAUTHORIZED=0 vercel link`.
+
+> **pnpm global** : si `pnpm add -g vercel` échoue avec `ERR_PNPM_NO_GLOBAL_BIN_DIR`, lance d'abord `pnpm setup && source ~/.zshrc`.
+
+Récupère aussi ton token : vercel.com → Settings → Tokens → Create Token (scope : compte personnel)
 
 ### 3.4 Ajouter les GitHub Secrets
 
@@ -371,6 +386,12 @@ Nécessaire pour que React Router fonctionne : toutes les routes sont redirigée
 
 ### 3.6 Créer `.github/workflows/deploy.yml`
 
+> **Piège monorepo** : `vercel build` échoue dans un monorepo pnpm avec l'erreur `spawn sh ENOENT`. Il essaie de lancer le build dans un sandbox mais ne trouve pas le shell dans le contexte du workspace pnpm.
+>
+> **Solution** : builder avec pnpm directement, puis créer manuellement la structure `.vercel/output/` attendue par Vercel (**Build Output API**), et déployer avec `vercel deploy --prebuilt`.
+
+> **Piège chemin doublé** : si le projet Vercel a "Root Directory = apps/frontend" et que tu lances `vercel deploy` depuis `apps/frontend`, Vercel résout le chemin comme `apps/frontend/apps/frontend` → erreur. Toujours lancer `vercel deploy` depuis la **racine du repo**.
+
 ```yaml
 name: Deploy
 
@@ -378,13 +399,13 @@ on:
   push:
     branches: [main]    # CD uniquement sur main, jamais sur les PRs
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy-frontend:
     name: Deploy Frontend → Vercel
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/frontend
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -394,27 +415,51 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        working-directory: .
-      - run: pnpm add -g vercel@latest
-      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+      - name: Build
+        run: pnpm --filter frontend build
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-      - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      # Crée la structure Build Output API de Vercel depuis la racine du repo
+      - name: Prepare Vercel output
+        run: |
+          mkdir -p .vercel/output/static
+          cp -r apps/frontend/dist/. .vercel/output/static/
+          cat > .vercel/output/config.json << 'EOF'
+          {
+            "version": 3,
+            "routes": [
+              { "handle": "filesystem" },
+              { "src": "/(.*)", "dest": "/index.html" }
+            ]
+          }
+          EOF
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 ```
 
+**Pourquoi cette structure `.vercel/output/` ?**
+
+C'est le **Vercel Build Output API** : un format standard que Vercel accepte pour déployer un build fait en dehors de son infrastructure.
+
+```
+.vercel/output/
+├── config.json      ← version + routes (fallback React Router)
+└── static/          ← contenu du dist/ Vite (HTML, JS, CSS, assets)
+```
+
+`{ "handle": "filesystem" }` → essaie de servir le fichier statique correspondant.
+`{ "src": "/(.*)", "dest": "/index.html" }` → fallback pour React Router (SPA).
+
 ### ✅ Checkpoint
 
-Fais un push → GitHub Actions lance `deploy.yml` → Vercel déploie → URL publique disponible.
+Fais un push sur `main` → GitHub Actions lance `deploy.yml` → Vercel déploie → URL publique disponible.
 
 ---
 
@@ -862,6 +907,8 @@ Pour `main` et `develop` :
 > **Note repo privé gratuit** : les branch protection rules ne sont pas appliquées sur les repos privés sans plan GitHub Team. Rends le repo public pour les activer gratuitement (recommandé pour un projet portfolio).
 
 > **Note approvals en solo** : mettre "Required approvals" à 1 bloque tes propres PRs puisque GitHub interdit l'auto-approbation via l'UI. Décoche la sous-option "Require approvals" pour travailler seul tout en gardant la protection PR active.
+
+> **Note bypass admin** : le bouton "Update branch" sur GitHub (pour resynchroniser `develop` avec `main` après un merge) essaie de pousser directement sur `develop`. Avec la protection activée, ça échoue avec `Couldn't update branch: Changes must be made through a pull request`. Fix : dans les branch protection rules de `develop`, **décoche** "Do not allow bypassing the above settings". L'admin peut alors bypasser et le bouton fonctionne. Le message `Bypassed rule violations` dans les logs git push est normal.
 
 ### 8.6 Stratégie de merge : quelle option choisir sur GitHub ?
 
