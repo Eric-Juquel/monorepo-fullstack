@@ -1,11 +1,11 @@
 name: CI
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Déclencheurs :
-#   push → main      : après merge de develop (dernier garde-fou avant prod)
-#   push → develop   : après merge d'une branche feat/* fix/* chore/*
-#   PR   → develop   : validation d'une feature avant merge dans develop
-#   PR   → main      : validation de develop avant mise en production
+# Triggers:
+#   push → main      : after develop is merged to main (final gate before prod)
+#   push → develop   : after a feat/* fix/* chore/* branch is merged
+#   PR   → develop   : validate a feature branch before merging into develop
+#   PR   → main      : validate develop before going to production
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
@@ -13,22 +13,19 @@ on:
   pull_request:
     branches: [main, develop]
 
-# Opter dans Node.js 24 pour les actions GitHub (checkout, setup-node...)
-# Node.js 20 est déprécié depuis septembre 2025, Node.js 24 obligatoire en juin 2026
+# Opt into Node.js 24 for GitHub Actions runners (checkout, setup-node...)
+# Node.js 20 is deprecated since September 2025, Node.js 24 required from June 2026
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # CI Frontend — déclenché si apps/frontend/** ou la config workspace change
-  # ───────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Frontend CI
+  # ─────────────────────────────────────────────────────────────────────────────
   ci-frontend:
     name: CI Frontend
     runs-on: ubuntu-latest
 
-    # Path filter : ce job est ignoré si seul le backend a changé
-    # Note : sur une PR, GitHub vérifie les fichiers modifiés
-    # Sur un push direct sur main, tous les jobs tournent
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,7 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm --filter frontend tsc -b --noEmit
+        run: pnpm --filter frontend typecheck
 
       - name: Lint
         run: pnpm --filter frontend lint
@@ -61,17 +58,16 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'http://localhost:3001' }}
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # Security — Scan de vulnérabilités avec Trivy (Aqua Security)
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Security — vulnerability scanning with Trivy (Aqua Security)
   #
-  # Deux scans complémentaires :
-  #   1. Filesystem scan → vulnérabilités dans les dépendances npm (package.json)
-  #   2. Image scan      → vulnérabilités dans l'image Docker (OS + packages système)
+  # Two complementary scans:
+  #   1. Filesystem scan → CVEs in npm dependencies (package.json / lockfile)
+  #   2. Image scan      → CVEs in the Docker image (OS packages, nginx, openssl…)
   #
-  # Trivy est le scanner open source le plus utilisé en CI/CD.
-  # Il détecte les CVE (Common Vulnerabilities and Exposures) connues.
-  # Le job échoue si des vulnérabilités CRITICAL ou HIGH sont trouvées.
-  # ───────────────────────────────────────────────────────────────────────────
+  # The job fails if CRITICAL or HIGH fixable vulnerabilities are found.
+  # Run `apk upgrade --no-cache` in the Dockerfile runner stage to fix OS CVEs.
+  # ─────────────────────────────────────────────────────────────────────────────
   security:
     name: Security Scan (Trivy)
     runs-on: ubuntu-latest
@@ -80,39 +76,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Scan 1 : Dépendances npm ──────────────────────────────────────────
-      # Scanne les fichiers package.json / pnpm-lock.yaml du frontend
-      # pour détecter des packages npm avec des CVE connues
+      # Scan 1: npm dependencies
       - name: Scan npm dependencies (filesystem)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: ./apps/frontend
           format: table
           severity: CRITICAL,HIGH
           exit-code: "1"
-          ignore-unfixed: true   # ignore les CVE sans correctif disponible
+          ignore-unfixed: true   # skip CVEs with no available fix
 
-      # ── Scan 2 : Image Docker ─────────────────────────────────────────────
-      # Build l'image Docker du frontend, puis la scanne pour détecter :
-      #   - des vulnérabilités dans les packages OS (apk/alpine)
-      #   - des vulnérabilités dans les binaires embarqués (nginx, openssl, etc.)
+      # Scan 2: Docker image
+      # Builds the image then scans OS-level packages (apk) and binaries
       - name: Build Docker image for scanning
         run: docker build -t frontend:${{ github.sha }} ./apps/frontend
 
       - name: Scan Docker image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: frontend:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
           exit-code: "1"
-          ignore-unfixed: true   # ignore les CVE sans correctif disponible
+          ignore-unfixed: true   # skip CVEs with no available fix
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # CI Backend — stub, à compléter quand NestJS sera créé
-  # ───────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Backend CI — stub, to be completed when NestJS is added
+  # ─────────────────────────────────────────────────────────────────────────────
   ci-backend:
     name: CI Backend
     runs-on: ubuntu-latest
@@ -135,7 +127,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # TODO: décommenter quand NestJS sera créé
+      # TODO: uncomment when NestJS is added
       # - name: Type check
       #   run: pnpm --filter backend tsc -b --noEmit
       # - name: Lint
@@ -145,5 +137,5 @@ jobs:
       # - name: Build
       #   run: pnpm --filter backend build
 
-      - name: Stub (backend pas encore créé)
-        run: echo "Backend CI sera activé quand NestJS sera ajouté"
+      - name: Stub (backend not yet created)
+        run: echo "Backend CI will be enabled when NestJS is added"

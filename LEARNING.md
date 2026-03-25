@@ -209,16 +209,33 @@ jobs:                     # Ensemble de jobs (s'exécutent en parallèle par dé
 **`run`** = exécute une commande shell directement
 **`needs`** = dépendance entre jobs (ex: `needs: ci-frontend` → attend que ci-frontend finisse)
 
-### 2.3 Créer `.github/workflows/ci.yml`
+### 2.3 Ajouter un script `typecheck` dans `apps/frontend/package.json`
+
+**Attention** : `pnpm --filter frontend tsc -b --noEmit` échouerait en CI parce que `pnpm --filter` cherche un **script npm** dans `package.json`, pas un binaire. Il faut créer un script intermédiaire :
+
+```json
+"scripts": {
+  "typecheck": "tsc -b --noEmit",
+  ...
+}
+```
+
+Puis dans le workflow, appeler `pnpm --filter frontend typecheck`.
+
+### 2.4 Créer `.github/workflows/ci.yml`
 
 ```yaml
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+# Opt into Node.js 24 for GitHub Actions runners
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   ci-frontend:
@@ -240,7 +257,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm --filter frontend tsc -b --noEmit
+        run: pnpm --filter frontend typecheck
 
       - name: Lint
         run: pnpm --filter frontend lint
@@ -259,8 +276,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Stub
-        run: echo "Backend CI à configurer"
+        run: echo "Backend CI to be configured"
 ```
+
+### 2.5 Créer `.env.test` pour les tests Vitest
+
+Les tests importent `axios.client.ts` qui lit `import.meta.env.VITE_API_BASE_URL`. En CI il n'y a pas de `.env` → les tests plantent avec `VITE_API_BASE_URL is not defined`.
+
+La solution : créer `apps/frontend/.env.test` **commité dans le repo** :
+
+```
+VITE_API_BASE_URL=http://localhost:3001
+```
+
+Ce n'est pas un secret — c'est une URL de test interceptée par MSW (Mock Service Worker). Vite charge automatiquement `.env.test` quand Vitest tourne (mode `test`).
+
+**Règle `.gitignore`** : vérifier que `.env.test` n'est pas exclu. Le `.gitignore` standard exclut `.env`, `.env.local`, `.env.*.local` — mais **pas** `.env.test`.`
 
 ### ✅ Checkpoint
 
@@ -448,8 +479,12 @@ ARG VITE_API_BASE_URL=http://localhost:3001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm build
 
-# Stage 2 : Serve
+# Stage 2: Runner
 FROM nginx:alpine AS runner
+
+# Upgrade Alpine packages to patch known CVEs (zlib, openssl, etc.)
+RUN apk upgrade --no-cache
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
@@ -458,6 +493,11 @@ CMD ["nginx", "-g", "daemon off;"]
 
 **Pourquoi copier `package.json` avant le code source ?**
 Docker met en cache chaque instruction. Si `package.json` n'a pas changé, il réutilise le cache de `pnpm install` → builds beaucoup plus rapides.
+
+**Pourquoi `apk upgrade --no-cache` dans le stage runner ?**
+`nginx:alpine` est une image de base qui embarque des packages Alpine (zlib, openssl, musl...) avec leurs propres versions. Ces packages peuvent contenir des CVE connues. `apk upgrade` met à jour tous les packages Alpine **au moment du build** → les CVEs corrigées dans Alpine sont appliquées.
+
+> **Règle pratique** : si Trivy signale une CVE dans un package OS (pas npm) avec une version fixée disponible, la solution est `apk upgrade --no-cache` dans le Dockerfile — pas de mise à jour de `package.json`.
 
 ### 4.5 Tester le build Docker
 
@@ -591,6 +631,8 @@ Scan 2 : Image Docker
 
 Dans `.github/workflows/ci.yml`, ajoute ce job (au même niveau que `ci-frontend`) :
 
+> **Version de trivy-action** : toujours utiliser la dernière version disponible sur [github.com/aquasecurity/trivy-action/releases](https://github.com/aquasecurity/trivy-action/releases). Une version inexistante fait échouer le workflow avec `Unable to resolve action`.
+
 ```yaml
 security:
   name: Security Scan (Trivy)
@@ -600,9 +642,9 @@ security:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # Scan 1 : dépendances npm
+    # Scan 1: npm dependencies
     - name: Scan npm dependencies
-      uses: aquasecurity/trivy-action@0.28.0
+      uses: aquasecurity/trivy-action@0.35.0
       with:
         scan-type: fs
         scan-ref: ./apps/frontend
@@ -611,12 +653,12 @@ security:
         exit-code: "1"
         ignore-unfixed: true
 
-    # Scan 2 : image Docker
+    # Scan 2: Docker image
     - name: Build Docker image for scanning
       run: docker build -t frontend:${{ github.sha }} ./apps/frontend
 
     - name: Scan Docker image
-      uses: aquasecurity/trivy-action@0.28.0
+      uses: aquasecurity/trivy-action@0.35.0
       with:
         scan-type: image
         image-ref: frontend:${{ github.sha }}
@@ -736,6 +778,100 @@ GitHub Actions CD (deploy.yml)
 
 ---
 
+## Étape 8 — Stratégie de branches (Git Flow simplifié)
+
+### 8.1 Pourquoi ne pas travailler directement sur `main` ?
+
+Travailler directement sur `main` en équipe crée des problèmes :
+- Un dev peut pousser du code cassé → la CI échoue → personne ne peut déployer
+- Pas de revue de code possible
+- Historique Git illisible (commits de dev mélangés aux releases)
+
+La solution : **deux branches permanentes + branches de feature temporaires**.
+
+### 8.2 Le flux complet
+
+```
+feat/ma-feature ──┐
+fix/mon-bug     ──┼──► develop ──► main ──► Vercel (production)
+chore/deps      ──┘
+```
+
+| Branche | Rôle | Qui y pousse |
+|---------|------|-------------|
+| `main` | Code en production, toujours stable | Personne directement — merge depuis `develop` uniquement |
+| `develop` | Branche d'intégration, code validé | Personne directement — merge depuis feature branches |
+| `feat/*` | Nouvelle fonctionnalité | Le dev, via PR vers `develop` |
+| `fix/*` | Correction de bug | Le dev, via PR vers `develop` |
+| `chore/*` | Maintenance (deps, config, CI) | Le dev, via PR vers `develop` |
+
+### 8.3 Workflow quotidien d'un dev
+
+```bash
+# 1. Toujours partir de develop à jour
+git checkout develop
+git pull origin develop
+
+# 2. Créer sa branche de feature
+git checkout -b feat/user-authentication
+
+# 3. Coder, committer
+git add .
+git commit -m "feat(auth): add JWT login endpoint"
+
+# 4. Pousser sa branche
+git push origin feat/user-authentication
+
+# 5. Ouvrir une Pull Request vers develop sur GitHub
+#    → La CI se déclenche (type check + lint + tests + build + Trivy)
+#    → Revue de code par un collègue
+#    → Merge si tout est vert
+
+# 6. Quand develop est prêt pour la prod
+#    → Ouvrir une PR develop → main
+#    → La CI tourne à nouveau (double validation)
+#    → Merge → deploy.yml déclenche le déploiement Vercel
+```
+
+### 8.4 Mettre à jour les déclencheurs CI
+
+Pour que la CI tourne sur les PRs **vers `develop`** et **vers `main`** :
+
+```yaml
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+```
+
+`deploy.yml` reste inchangé — le CD se déclenche uniquement sur push vers `main`.
+
+### 8.5 Protéger les branches sur GitHub
+
+**GitHub → Settings → Branches → Add branch ruleset**
+
+Pour `main` et `develop` :
+- ✅ Require a pull request before merging
+- ✅ Require status checks to pass → sélectionner `CI Frontend`, `Security Scan (Trivy)`, `CI Backend`
+- ✅ Block force pushes
+- ✅ Restrict deletions
+
+→ Impossible de pousser directement, impossible de merger si la CI est rouge.
+
+### ✅ Checkpoint
+
+```bash
+git checkout develop
+git checkout -b feat/test-branching
+git commit --allow-empty -m "test: verify branching strategy"
+git push origin feat/test-branching
+# → ouvrir une PR vers develop sur GitHub
+# → vérifier que la CI se déclenche et passe
+```
+
+---
+
 ## Glossaire
 
 | Terme | Définition |
@@ -760,13 +896,23 @@ GitHub Actions CD (deploy.yml)
 | **CVE** | Common Vulnerabilities and Exposures — référence publique d'une faille de sécurité |
 | **Trivy** | Scanner open source de vulnérabilités (images Docker, filesystems, dépendances) |
 | **SARIF** | Format standard pour rapporter des vulnérabilités dans GitHub Security tab |
+| **`apk upgrade`** | Commande Alpine Linux pour mettre à jour les packages OS — corrige les CVE dans l'image Docker |
+| **`.env.test`** | Fichier d'environnement chargé automatiquement par Vite/Vitest en mode test — commitable car sans secrets |
+| **`develop`** | Branche d'intégration — reçoit les merges des branches `feat/*`, `fix/*`, `chore/*` |
+| **Branch protection** | Règles GitHub qui empêchent les pushs directs et bloquent les merges si la CI est rouge |
+| **Pull Request (PR)** | Demande de merge d'une branche vers une autre — permet la revue de code et déclenche la CI |
 
 ---
 
-## Prochaines étapes (quand NestJS sera créé)
+## Prochaines étapes
 
-1. Initialiser NestJS dans `apps/backend/` : `pnpm --filter backend nest new .`
-2. Mettre à jour `apps/backend/Dockerfile` (décommenter les lignes)
-3. Activer le job `ci-backend` dans `ci.yml` (décommenter les steps)
-4. Configurer `deploy-backend` dans `deploy.yml` (Railway, Fly.io, ou autre)
-5. Mettre à jour `docker-compose.yml` pour ajouter la BDD (PostgreSQL)
+### CI/CD à finaliser
+1. Configurer les **branch protection rules** sur GitHub (étape 8.5)
+2. Configurer les **GitHub Secrets** Vercel pour activer `deploy.yml` (étape 3.4)
+
+### Quand NestJS sera créé
+3. Initialiser NestJS dans `apps/backend/` : `pnpm --filter backend nest new .`
+4. Mettre à jour `apps/backend/Dockerfile` (décommenter les lignes)
+5. Activer le job `ci-backend` dans `ci.yml` (décommenter les steps)
+6. Configurer `deploy-backend` dans `deploy.yml` (Railway, Fly.io, ou autre)
+7. Mettre à jour `docker-compose.yml` pour ajouter la BDD (PostgreSQL)
