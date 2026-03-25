@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "home": "Home",
+    "users": "Users"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "toggle": "Toggle theme"
+  },
+  "locale": {
+    "switch": "FR"
+  },
+  "home": {
+    "title": "Welcome to React 19 Starter Kit",
+    "subtitle": "A modern, scalable front-end starter built with best practices",
+    "features": {
+      "title": "Tech Stack",
+      "react": "React 19 with TypeScript",
+      "vite": "Vite for blazing fast builds",
+      "tailwind": "Tailwind CSS v4 with dark mode",
+      "tanstack": "TanStack Query for data fetching",
+      "zustand": "Zustand for state management",
+      "form": "React Hook Form + Zod validation",
+      "router": "React Router with lazy loading",
+      "testing": "Vitest + MSW for testing",
+      "biome": "Biome for linting & formatting"
+    }
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Full CRUD demo with TanStack Query + Axios + json-server",
+    "loading": "Loading users...",
+    "error": "Failed to load users",
+    "empty": "No users found",
+    "edit": "Edit",
+    "delete": "Delete",
+    "form": {
+      "addTitle": "Add a new user",
+      "editTitle": "Edit user",
+      "name": "Name",
+      "namePlaceholder": "Enter name",
+      "email": "Email",
+      "emailPlaceholder": "Enter email",
+      "submit": "Add User",
+      "update": "Save changes",
+      "cancel": "Cancel",
+      "addSuccess": "User added successfully!",
+      "updateSuccess": "User updated successfully!",
+      "deleteSuccess": "User deleted successfully!",
+      "addError": "Failed to add user",
+      "updateError": "Failed to update user",
+      "deleteError": "Failed to delete user",
+      "nameMin": "Name must be at least 2 characters",
+      "emailInvalid": "Please enter a valid email address"
+    }
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "backHome": "Back to Home",
+    "notFound": {
+      "title": "Page Not Found",
+      "description": "The page you are looking for does not exist."
+    }
+  }
+}

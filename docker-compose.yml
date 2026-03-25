@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — Développement local avec Docker
+#
+# Commandes utiles :
+#   docker compose up          → démarrer tous les services
+#   docker compose up frontend → démarrer seulement le frontend
+#   docker compose down        → arrêter et supprimer les containers
+#   docker compose logs -f     → voir les logs en temps réel
+#   docker compose build       → reconstruire les images
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Frontend React ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./apps/frontend    # Dossier de build (où se trouve le Dockerfile)
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://backend:3000  # URL interne Docker (pas localhost !)
+    ports:
+      - "8080:80"   # localhost:8080 → container:80 (nginx)
+    depends_on:
+      - backend     # Attendre que le backend soit démarré
+    networks:
+      - app-network
+
+  # ── Backend NestJS ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"   # localhost:3000 → container:3000
+    environment:
+      NODE_ENV: development
+      # DATABASE_URL: postgres://user:password@db:5432/mydb  ← à décommenter plus tard
+    networks:
+      - app-network
+    # depends_on:
+    #   - db          ← décommenter quand une BDD sera ajoutée
+
+  # ── Base de données (future) ────────────────────────────────────────────────
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: mydb
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+
+# ── Réseau partagé ─────────────────────────────────────────────────────────────
+# Les services communiquent entre eux par leur nom (ex: "backend", "db")
+# sans exposer leurs ports sur l'hôte
+networks:
+  app-network:
+    driver: bridge
+
+# ── Volumes persistants ────────────────────────────────────────────────────────
+# volumes:
+#   postgres-data:   ← décommenter quand la BDD sera ajoutée

@@ -1,0 +1,92 @@
+name: CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Déclencheurs : sur push et PR vers main
+# path filters → le job frontend ne tourne QUE si des fichiers frontend changent
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # CI Frontend — déclenché si apps/frontend/** ou la config workspace change
+  # ───────────────────────────────────────────────────────────────────────────
+  ci-frontend:
+    name: CI Frontend
+    runs-on: ubuntu-latest
+
+    # Path filter : ce job est ignoré si seul le backend a changé
+    # Note : sur une PR, GitHub vérifie les fichiers modifiés
+    # Sur un push direct sur main, tous les jobs tournent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter frontend tsc -b --noEmit
+
+      - name: Lint
+        run: pnpm --filter frontend lint
+
+      - name: Tests
+        run: pnpm --filter frontend test:run
+
+      - name: Build
+        run: pnpm --filter frontend build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'http://localhost:3001' }}
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # CI Backend — stub, à compléter quand NestJS sera créé
+  # ───────────────────────────────────────────────────────────────────────────
+  ci-backend:
+    name: CI Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # TODO: décommenter quand NestJS sera créé
+      # - name: Type check
+      #   run: pnpm --filter backend tsc -b --noEmit
+      # - name: Lint
+      #   run: pnpm --filter backend lint
+      # - name: Tests
+      #   run: pnpm --filter backend test:run
+      # - name: Build
+      #   run: pnpm --filter backend build
+
+      - name: Stub (backend pas encore créé)
+        run: echo "Backend CI sera activé quand NestJS sera ajouté"

@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "users": "Utilisateurs"
+  },
+  "theme": {
+    "light": "Clair",
+    "dark": "Sombre",
+    "toggle": "Changer de thème"
+  },
+  "locale": {
+    "switch": "EN"
+  },
+  "home": {
+    "title": "Bienvenue sur React 19 Starter Kit",
+    "subtitle": "Un starter front-end moderne et scalable, construit avec les bonnes pratiques",
+    "features": {
+      "title": "Stack Technique",
+      "react": "React 19 avec TypeScript",
+      "vite": "Vite pour des builds ultra-rapides",
+      "tailwind": "Tailwind CSS v4 avec mode sombre",
+      "tanstack": "TanStack Query pour le data fetching",
+      "zustand": "Zustand pour la gestion d'état",
+      "form": "React Hook Form + validation Zod",
+      "router": "React Router avec lazy loading",
+      "testing": "Vitest + MSW pour les tests",
+      "biome": "Biome pour le linting et le formatage"
+    }
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "subtitle": "Démo CRUD complète avec TanStack Query + Axios + json-server",
+    "loading": "Chargement des utilisateurs...",
+    "error": "Erreur lors du chargement des utilisateurs",
+    "empty": "Aucun utilisateur trouvé",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "form": {
+      "addTitle": "Ajouter un utilisateur",
+      "editTitle": "Modifier l'utilisateur",
+      "name": "Nom",
+      "namePlaceholder": "Entrez le nom",
+      "email": "Email",
+      "emailPlaceholder": "Entrez l'email",
+      "submit": "Ajouter",
+      "update": "Enregistrer",
+      "cancel": "Annuler",
+      "addSuccess": "Utilisateur ajouté avec succès !",
+      "updateSuccess": "Utilisateur modifié avec succès !",
+      "deleteSuccess": "Utilisateur supprimé avec succès !",
+      "addError": "Erreur lors de l'ajout",
+      "updateError": "Erreur lors de la modification",
+      "deleteError": "Erreur lors de la suppression",
+      "nameMin": "Le nom doit contenir au moins 2 caractères",
+      "emailInvalid": "Veuillez entrer une adresse email valide"
+    }
+  },
+  "errors": {
+    "title": "Une erreur est survenue",
+    "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+    "backHome": "Retour à l'accueil",
+    "notFound": {
+      "title": "Page non trouvée",
+      "description": "La page que vous recherchez n'existe pas."
+    }
+  }
+}

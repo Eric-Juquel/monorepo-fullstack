@@ -1,0 +1,12 @@
+{
+  "name": "backend",
+  "private": true,
+  "version": "0.0.0",
+  "description": "NestJS backend — à créer",
+  "scripts": {
+    "dev": "echo 'Backend NestJS pas encore créé'",
+    "build": "echo 'Backend NestJS pas encore créé'",
+    "lint": "echo 'Backend NestJS pas encore créé'",
+    "test:run": "echo 'Backend NestJS pas encore créé'"
+  }
+}
