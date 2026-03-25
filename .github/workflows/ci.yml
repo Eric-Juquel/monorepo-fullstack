@@ -10,6 +10,11 @@ on:
   pull_request:
     branches: [main]
 
+# Opter dans Node.js 24 pour les actions GitHub (checkout, setup-node...)
+# Node.js 20 est déprécié depuis septembre 2025, Node.js 24 obligatoire en juin 2026
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
   # CI Frontend — déclenché si apps/frontend/** ou la config workspace change
