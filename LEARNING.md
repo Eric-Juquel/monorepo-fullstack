@@ -558,11 +558,128 @@ docker compose up
 
 ---
 
-## Étape 6 — Créer le repo GitHub et pousser
+## Étape 6 — Scan de vulnérabilités avec Trivy
+
+### 6.1 Comprendre les CVE et pourquoi scanner les images Docker
+
+Une **CVE** (Common Vulnerabilities and Exposures) est une faille de sécurité publiquement connue, référencée par un identifiant (ex: `CVE-2023-12345`). Les bases de données de CVE (NVD, OSV...) sont mises à jour en permanence.
+
+Sans scan, ton image Docker peut embarquer :
+- Des **packages OS vulnérables** (libc, openssl, curl dans l'image `nginx:alpine`)
+- Des **packages npm vulnérables** (dépendances transitives de ton projet)
+
+**Trivy** (par Aqua Security) est le scanner open source le plus utilisé en CI/CD. Il :
+- interroge les bases de CVE connues
+- analyse les packages installés dans l'image ou le filesystem
+- classe les vulnérabilités par sévérité : CRITICAL, HIGH, MEDIUM, LOW
+
+### 6.2 Deux types de scans complémentaires
+
+```
+Scan 1 : Filesystem (npm)
+  → Analyse package.json / pnpm-lock.yaml
+  → Détecte les packages npm avec des CVE connues
+  → Rapide (pas besoin de Docker)
+
+Scan 2 : Image Docker
+  → Build l'image puis la scanne
+  → Détecte les vulnérabilités OS (alpine, nginx, openssl...)
+  → Plus complet mais plus lent (~2 min)
+```
+
+### 6.3 Ajouter le job `security` dans `ci.yml`
+
+Dans `.github/workflows/ci.yml`, ajoute ce job (au même niveau que `ci-frontend`) :
+
+```yaml
+security:
+  name: Security Scan (Trivy)
+  runs-on: ubuntu-latest
+
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Scan 1 : dépendances npm
+    - name: Scan npm dependencies
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: fs
+        scan-ref: ./apps/frontend
+        format: table
+        severity: CRITICAL,HIGH
+        exit-code: "1"
+        ignore-unfixed: true
+
+    # Scan 2 : image Docker
+    - name: Build Docker image for scanning
+      run: docker build -t frontend:${{ github.sha }} ./apps/frontend
+
+    - name: Scan Docker image
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: image
+        image-ref: frontend:${{ github.sha }}
+        format: table
+        severity: CRITICAL,HIGH
+        exit-code: "1"
+        ignore-unfixed: true
+```
+
+**`exit-code: "1"`** → le job échoue si des vulnérabilités CRITICAL ou HIGH sont trouvées.
+**`ignore-unfixed: true`** → ignore les CVE pour lesquelles il n'existe pas encore de correctif (tu ne peux rien y faire).
+**`format: table`** → affiche les résultats sous forme de tableau dans les logs CI.
+
+### 6.4 Lire les résultats Trivy
+
+Exemple de sortie dans les logs GitHub Actions :
+
+```
+2024-01-01T00:00:00.000Z    INFO    Vulnerability scanning is enabled
+frontend:abc1234 (alpine 3.19.0)
+================================
+Total: 0 (HIGH: 0, CRITICAL: 0)   ← ✅ aucune vulnérabilité
+
+apps/frontend (pnpm)
+====================
+Total: 2 (HIGH: 2, CRITICAL: 0)
+┌──────────────────┬────────────────┬──────────┬──────────────────────┐
+│    Library       │  Vulnerability │ Severity │ Installed Version    │
+├──────────────────┼────────────────┼──────────┼──────────────────────┤
+│ some-package     │ CVE-2023-XXXXX │ HIGH     │ 1.0.0 (fixed: 1.0.1) │
+└──────────────────┴────────────────┴──────────┴──────────────────────┘
+```
+
+Si une vulnérabilité est trouvée avec un correctif disponible → mets à jour le package.
+
+### 6.5 Tester Trivy en local
+
+```bash
+# Installer Trivy (macOS)
+brew install trivy
+
+# Scanner les dépendances npm
+trivy fs --severity CRITICAL,HIGH ./apps/frontend
+
+# Scanner une image Docker
+docker build -t frontend:local ./apps/frontend
+trivy image --severity CRITICAL,HIGH frontend:local
+```
+
+### ✅ Checkpoint
+
+- `trivy fs ./apps/frontend` → 0 vulnérabilité CRITICAL/HIGH
+- `trivy image frontend:local` → 0 vulnérabilité CRITICAL/HIGH
+- Le job `security` est vert dans GitHub Actions
+
+---
+
+## Étape 7 — Créer le repo GitHub et pousser
 
 ```bash
 # À la racine du monorepo
 cd monorepo-fullstack
+
 
 # Créer le repo privé sur GitHub
 gh repo create monorepo-fullstack --private --source=. --remote=origin
@@ -607,9 +724,10 @@ monorepo-fullstack/
 ```
 Push sur main
     ↓
-GitHub Actions CI (ci.yml)
-  ├── ci-frontend → type check + lint + tests + build ✓
-  └── ci-backend  → (stub, à activer avec NestJS)
+GitHub Actions CI (ci.yml) — jobs en parallèle
+  ├── ci-frontend  → type check + lint + tests + build ✓
+  ├── ci-backend   → (stub, à activer avec NestJS)
+  └── security     → Trivy : scan npm + scan image Docker ✓
     ↓ (si CI passe)
 GitHub Actions CD (deploy.yml)
   ├── deploy-frontend → Vercel 🚀
@@ -639,6 +757,9 @@ GitHub Actions CD (deploy.yml)
 | **docker-compose** | Outil pour orchestrer plusieurs containers ensemble |
 | **Vercel** | Plateforme de déploiement spécialisée pour les frontends (SPA, SSR) |
 | **SPA** | Single Page Application — app React où toutes les routes → `index.html` |
+| **CVE** | Common Vulnerabilities and Exposures — référence publique d'une faille de sécurité |
+| **Trivy** | Scanner open source de vulnérabilités (images Docker, filesystems, dépendances) |
+| **SARIF** | Format standard pour rapporter des vulnérabilités dans GitHub Security tab |
 
 ---
 

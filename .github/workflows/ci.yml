@@ -54,6 +54,55 @@ jobs:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'http://localhost:3001' }}
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Security — Scan de vulnérabilités avec Trivy (Aqua Security)
+  #
+  # Deux scans complémentaires :
+  #   1. Filesystem scan → vulnérabilités dans les dépendances npm (package.json)
+  #   2. Image scan      → vulnérabilités dans l'image Docker (OS + packages système)
+  #
+  # Trivy est le scanner open source le plus utilisé en CI/CD.
+  # Il détecte les CVE (Common Vulnerabilities and Exposures) connues.
+  # Le job échoue si des vulnérabilités CRITICAL ou HIGH sont trouvées.
+  # ───────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security Scan (Trivy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Scan 1 : Dépendances npm ──────────────────────────────────────────
+      # Scanne les fichiers package.json / pnpm-lock.yaml du frontend
+      # pour détecter des packages npm avec des CVE connues
+      - name: Scan npm dependencies (filesystem)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: ./apps/frontend
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true   # ignore les CVE sans correctif disponible
+
+      # ── Scan 2 : Image Docker ─────────────────────────────────────────────
+      # Build l'image Docker du frontend, puis la scanne pour détecter :
+      #   - des vulnérabilités dans les packages OS (apk/alpine)
+      #   - des vulnérabilités dans les binaires embarqués (nginx, openssl, etc.)
+      - name: Build Docker image for scanning
+        run: docker build -t frontend:${{ github.sha }} ./apps/frontend
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: frontend:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true   # ignore les CVE sans correctif disponible
+
+  # ───────────────────────────────────────────────────────────────────────────
   # CI Backend — stub, à compléter quand NestJS sera créé
   # ───────────────────────────────────────────────────────────────────────────
   ci-backend:
